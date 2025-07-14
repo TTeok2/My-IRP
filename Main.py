@@ -102,13 +102,23 @@ if raw_df is not None:
 
     if "총비용부담률" in df.columns:
         st.subheader("3. 수익률 vs 총비용부담률 산점도")
+
+        # 순효율 상위 5개 사업자 기준 데이터셋 추출
+        top5 = df.sort_values(by="순효율", ascending=False).head(5)
+        top5_labels = alt.Chart(top5).mark_text(align='left', dx=7, dy=-7).encode(
+            x="총비용부담률:Q",
+            y="1년수익률:Q",
+            text="사업자명"
+        )
+
         scatter = alt.Chart(df).mark_circle(size=60).encode(
             x=alt.X("총비용부담률:Q", title="총비용부담률 (%)"),
             y=alt.Y("1년수익률:Q", title="1년 수익률 (%)"),
             color="원리금구분:N",
             tooltip=["사업자명", "1년수익률", "총비용부담률"]
         ).properties(width=700, height=400)
-        st.altair_chart(scatter, use_container_width=True)
+
+        st.altair_chart(scatter + top5_labels, use_container_width=True)
 
         st.subheader("4. 순효율(수익률 - 비용) 높은 사업자")
         st.caption("💡 순효율은 단순히 수익률에서 총비용부담률을 뺀 값으로, 실제 투자성과와 차이가 있을 수 있습니다.")
@@ -120,6 +130,25 @@ if raw_df is not None:
     selected_type = st.selectbox("상품 유형 선택", options=df["원리금구분"].unique())
     filtered = df[df["원리금구분"] == selected_type]
     st.dataframe(filtered.sort_values(by="1년수익률", ascending=False), use_container_width=True)
+
+    # ------------------ 6. 사업자별 상품 포트폴리오 요약 ------------------
+    st.subheader("6. 사업자별 상품 포트폴리오 요약")
+    portfolio = df.groupby(["사업자명", "원리금구분"]).size().unstack(fill_value=0)
+    st.dataframe(portfolio, use_container_width=True)
+
+    # ------------------ 7. 사용자 성향별 추천 시스템 ------------------
+    st.subheader("7. IRP 사용자 유형별 추천 필터")
+    risk_pref = st.selectbox("⚖️ 나의 투자 성향은?", ["안정형", "중립형", "공격형"])
+
+    if risk_pref == "안정형":
+        reco = df[df["원리금구분"].str.contains("보장")]
+    elif risk_pref == "중립형":
+        reco = df[df["1년수익률"] >= df["1년수익률"].median()]
+    else:
+        reco = df[df["1년수익률"] >= df["1년수익률"].quantile(0.75)]
+
+    st.caption("💡 추천 기준은 최근 1년 수익률 및 상품 유형을 기반으로 하며 실제 투자에 앞서 추가 확인이 필요합니다.")
+    st.dataframe(reco.sort_values(by="1년수익률", ascending=False), use_container_width=True)
 
 else:
     st.info("파일을 불러올 수 없습니다. 기본 파일이 없거나 업로드되지 않았습니다.")
