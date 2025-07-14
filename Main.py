@@ -133,21 +133,26 @@ if raw_df is not None:
     st.dataframe(filtered.sort_values(by="1년수익률", ascending=False).reset_index(drop=True), use_container_width=True)
 
     st.subheader("6. 사업자별 상품 포트폴리오 요약")
-    portfolio = df.groupby(["사업자명", "원리금구분"], as_index=False).size().pivot(index="사업자명", columns="원리금구분", values="size").fillna(0).astype(int)
-    st.dataframe(portfolio, use_container_width=True)
+    portfolio = df.groupby(["사업자명", "원리금구분"], as_index=False).size()
+    portfolio_pivot = portfolio.pivot(index="사업자명", columns="원리금구분", values="size").fillna(0).astype(int)
+    st.dataframe(portfolio_pivot, use_container_width=True)
 
     st.subheader("7. IRP 사용자 유형별 추천 필터")
     risk_pref = st.selectbox("⚖️ 나의 투자 성향은?", ["안정형", "중립형", "공격형"])
 
     if risk_pref == "안정형":
-        reco = df[df["원리금구분"].str.contains("보장")]
+        reco = df[df["원리금구분"].str.contains("보장")].copy()
+        reco["추천 사유"] = "원리금 보장형 상품으로 안정적인 수익 추구"
     elif risk_pref == "중립형":
         median = df["1년수익률"].median()
-        reco = df[(df["1년수익률"] >= median) & (df["1년수익률"] < df["1년수익률"].quantile(0.75))]
+        upper = df["1년수익률"].quantile(0.75)
+        reco = df[(df["1년수익률"] >= median) & (df["1년수익률"] < upper)].copy()
+        reco["추천 사유"] = "중간 수준 수익률로 위험과 수익의 균형"
     else:
-        reco = df[df["1년수익률"] >= df["1년수익률"].quantile(0.75)]
+        reco = df[df["1년수익률"] >= df["1년수익률"].quantile(0.75)].copy()
+        reco["추천 사유"] = "수익률 상위 25%로 고수익 지향"
 
-    st.caption(f"💡 선택한 '{risk_pref}' 투자 성향에 따라 상품이 필터링되어 추천됩니다. 실제 투자 시 추가 확인이 필요합니다.")
+    st.caption(f"💡 선택한 '{risk_pref}' 투자 성향에 따라 상품이 필터링되고 추천 사유가 표시됩니다. 실제 투자 시 추가 확인이 필요합니다.")
     st.dataframe(reco.sort_values(by="1년수익률", ascending=False).reset_index(drop=True), use_container_width=True)
 
 else:
