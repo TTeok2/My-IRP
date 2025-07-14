@@ -128,5 +128,31 @@ if raw_df is not None:
     filtered = df[(df["원리금구분"] == selected_type) & (df["사업자명"] == selected_provider)]
     st.dataframe(filtered.sort_values(by="1년수익률", ascending=False).reset_index(drop=True), use_container_width=True)
 
+    st.subheader("6. 수익률 추세 비교 (1년 vs 3년 vs 5년)")
+    trend_mode = st.radio("비교 기준", ["사업자별", "상품유형별"], horizontal=True)
+
+    if trend_mode == "사업자별":
+        trend_df = df.groupby("사업자명", as_index=False)[["1년수익률", "3년수익률", "5년수익률"]].mean().dropna()
+        trend_df = pd.melt(trend_df, id_vars="사업자명", value_vars=["1년수익률", "3년수익률", "5년수익률"],
+                            var_name="수익률기간", value_name="수익률")
+        trend_chart = alt.Chart(trend_df).mark_bar().encode(
+            x=alt.X("사업자명:N", sort="-y", title="사업자명"),
+            y=alt.Y("수익률:Q", title="수익률 (%)"),
+            color="수익률기간:N",
+            tooltip=["사업자명", "수익률기간", "수익률"]
+        ).properties(width=800, height=400)
+    else:
+        trend_df = df.groupby("원리금구분", as_index=False)[["1년수익률", "3년수익률", "5년수익률"]].mean().dropna()
+        trend_df = pd.melt(trend_df, id_vars="원리금구분", value_vars=["1년수익률", "3년수익률", "5년수익률"],
+                            var_name="수익률기간", value_name="수익률")
+        trend_chart = alt.Chart(trend_df).mark_bar().encode(
+            x=alt.X("원리금구분:N", title="상품유형"),
+            y=alt.Y("수익률:Q", title="수익률 (%)"),
+            color="수익률기간:N",
+            tooltip=["원리금구분", "수익률기간", "수익률"]
+        ).properties(width=600, height=400)
+
+    st.altair_chart(trend_chart, use_container_width=True)
+
 else:
     st.info("파일을 불러올 수 없습니다. 기본 파일이 없거나 업로드되지 않았습니다.")
