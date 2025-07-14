@@ -5,6 +5,7 @@ import os
 
 st.set_page_config(page_title="IRP 수익률 대시보드", layout="wide")
 st.title("📊 IRP 수익률 비교 대시보드 (2025-1분기)")
+st.caption("⚠️ 해당 페이지의 수치와 내용은 실제 상품 정보와 일부 차이가 있을 수 있으니 참고용으로 활용해주세요. 총 42개 퇴직연금사업자 대상 데이터 기준입니다.")
 
 # ------------------ 파일 로딩 함수 ------------------
 @st.cache_data
@@ -17,7 +18,6 @@ def load_excel_data(uploaded_file=None):
             return None
     else:
         default_path = os.path.join(os.path.dirname(__file__), "2025-1 IRP 수익률.xlsx")
-        st.text(f"📁 기본 파일 경로: {default_path}")
         if os.path.exists(default_path):
             try:
                 return pd.read_excel(default_path, header=7)
@@ -65,12 +65,11 @@ def preprocess_data(df, fee_df):
         (~df["원리금구분"].str.contains("합계|자사계열사|기타", na=False))
     ]
 
-    # 총비용부담률 병합
     if not fee_df.empty:
         df = df.merge(fee_df, on="사업자명", how="left")
         df["순효율"] = df["1년수익률"] - df["총비용부담률"]
 
-    return df
+    return df.reset_index(drop=True)
 
 # ------------------ 파일 업로드 ------------------
 st.sidebar.header("📁 파일 업로드")
@@ -92,7 +91,7 @@ if raw_df is not None:
     st.altair_chart(box, use_container_width=True)
 
     st.subheader("2. 사업자별 평균 수익률")
-    avg_df = df.groupby("사업자명")[["1년수익률"]].mean().reset_index().sort_values(by="1년수익률", ascending=False)
+    avg_df = df.groupby("사업자명", as_index=False)[["1년수익률"]].mean().sort_values(by="1년수익률", ascending=False)
     bar = alt.Chart(avg_df).mark_bar().encode(
         x=alt.X("사업자명:N", sort="-y", title="사업자명"),
         y=alt.Y("1년수익률:Q", title="평균 수익률 (%)"),
@@ -102,8 +101,8 @@ if raw_df is not None:
 
     if "총비용부담률" in df.columns:
         st.subheader("3. 수익률 vs 총비용부담률 산점도")
+        st.caption("📍 산점도에 표시된 사업자는 순효율 상위 5개 사업자입니다.")
 
-        # 순효율 상위 5개 사업자 기준 데이터셋 추출
         top5 = df.sort_values(by="순효율", ascending=False).head(5)
         top5_labels = alt.Chart(top5).mark_text(align='left', dx=7, dy=-7).encode(
             x="총비용부담률:Q",
@@ -124,31 +123,32 @@ if raw_df is not None:
         st.caption("💡 순효율은 단순히 수익률에서 총비용부담률을 뺀 값으로, 실제 투자성과와 차이가 있을 수 있습니다.")
         eff_df = df[["사업자명", "원리금구분", "1년수익률", "총비용부담률", "순효율"]].dropna()
         top_eff = eff_df.sort_values(by="순효율", ascending=False)
-        st.dataframe(top_eff, use_container_width=True)
+        st.dataframe(top_eff.reset_index(drop=True), use_container_width=True)
 
-    st.subheader("5. 상품 유형별 필터링")
-    selected_type = st.selectbox("상품 유형 선택", options=df["원리금구분"].unique())
-    filtered = df[df["원리금구분"] == selected_type]
-    st.dataframe(filtered.sort_values(by="1년수익률", ascending=False), use_container_width=True)
+    st.subheader("5. 상품/사업자별 필터링")
+    col1, col2 = st.columns(2)
+    selected_type = col1.selectbox("상품 유형 선택", options=df["원리금구분"].unique())
+    selected_provider = col2.selectbox("사업자 선택", options=sorted(df["사업자명"].unique()))
+    filtered = df[(df["원리금구분"] == selected_type) & (df["사업자명"] == selected_provider)]
+    st.dataframe(filtered.sort_values(by="1년수익률", ascending=False).reset_index(drop=True), use_container_width=True)
 
-    # ------------------ 6. 사업자별 상품 포트폴리오 요약 ------------------
     st.subheader("6. 사업자별 상품 포트폴리오 요약")
-    portfolio = df.groupby(["사업자명", "원리금구분"]).size().unstack(fill_value=0)
+    portfolio = df.groupby(["사업자명", "원리금구분"], as_index=False).size().pivot(index="사업자명", columns="원리금구분", values="size").fillna(0).astype(int)
     st.dataframe(portfolio, use_container_width=True)
 
-    # ------------------ 7. 사용자 성향별 추천 시스템 ------------------
     st.subheader("7. IRP 사용자 유형별 추천 필터")
     risk_pref = st.selectbox("⚖️ 나의 투자 성향은?", ["안정형", "중립형", "공격형"])
 
     if risk_pref == "안정형":
         reco = df[df["원리금구분"].str.contains("보장")]
     elif risk_pref == "중립형":
-        reco = df[df["1년수익률"] >= df["1년수익률"].median()]
+        median = df["1년수익률"].median()
+        reco = df[(df["1년수익률"] >= median) & (df["1년수익률"] < df["1년수익률"].quantile(0.75))]
     else:
         reco = df[df["1년수익률"] >= df["1년수익률"].quantile(0.75)]
 
-    st.caption("💡 추천 기준은 최근 1년 수익률 및 상품 유형을 기반으로 하며 실제 투자에 앞서 추가 확인이 필요합니다.")
-    st.dataframe(reco.sort_values(by="1년수익률", ascending=False), use_container_width=True)
+    st.caption(f"💡 선택한 '{risk_pref}' 투자 성향에 따라 상품이 필터링되어 추천됩니다. 실제 투자 시 추가 확인이 필요합니다.")
+    st.dataframe(reco.sort_values(by="1년수익률", ascending=False).reset_index(drop=True), use_container_width=True)
 
 else:
     st.info("파일을 불러올 수 없습니다. 기본 파일이 없거나 업로드되지 않았습니다.")
