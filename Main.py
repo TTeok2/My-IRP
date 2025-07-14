@@ -92,12 +92,12 @@ if raw_df is not None:
     st.altair_chart(bar, use_container_width=True)
 
     if "총비용부담률" in df.columns:
-        st.subheader("3. 수익률 vs 총비용부담률 산점도")
-st.markdown("""
-    **※ 총비용부담률** = 당해연도 총 비용 ÷ 적립금  
-    (총 비용 = 운용관리수수료 + 자산관리수수료 + 펀드총비용(운용보수, 판매보수 등))
-""")
-        st.caption("📍 산점도에 표시된 사업자는 순효율 상위 5개 사업자입니다.")
+    st.subheader("3. 수익률 vs 총비용부담률 산점도")
+    st.markdown("""
+        **※ 총비용부담률** = 당해연도 총 비용 ÷ 적립금  
+        (총 비용 = 운용관리수수료 + 자산관리수수료 + 펀드총비용(운용보수, 판매보수 등))
+    """)
+    st.caption("📍 산점도에 표시된 사업자는 순효율 상위 5개 사업자입니다.")
 
         top5 = df.sort_values(by="순효율", ascending=False).head(5)
         top5_labels = alt.Chart(top5).mark_text(align='left', dx=7, dy=-7).encode(
