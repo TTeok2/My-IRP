@@ -16,9 +16,15 @@ def load_excel_data(uploaded_file=None):
             st.error(f"파일을 불러오는 데 실패했습니다: {e}")
             return None
     else:
-        default_path = "2025-1 IRP 수익률.xlsx"
+        # __file__ 기준 현재 디렉토리에서 파일 찾기
+        default_path = os.path.join(os.path.dirname(__file__), "2025-1 IRP 수익률.xlsx")
+        st.text(f"📁 기본 파일 경로: {default_path}")
         if os.path.exists(default_path):
-            return pd.read_excel(default_path, header=7)
+            try:
+                return pd.read_excel(default_path, header=7)
+            except Exception as e:
+                st.error(f"기본 파일을 불러오는 데 실패했습니다: {e}")
+                return None
         else:
             st.warning("기본 파일이 존재하지 않습니다. 파일을 업로드해주세요.")
             return None
@@ -31,8 +37,7 @@ def preprocess_data(df):
     numeric_cols = ["적립금", "1년수익률", "3년수익률", "5년수익률", "7년수익률", "10년수익률"]
     for col in numeric_cols:
         df[col] = (
-            df[col]
-            .astype(str)
+            df[col].astype(str)
             .str.replace(",", "", regex=False)
             .str.strip()
             .replace("-", pd.NA)
@@ -81,4 +86,3 @@ if raw_df is not None:
 
 else:
     st.info("파일을 불러올 수 없습니다. 기본 파일이 없거나 업로드되지 않았습니다.")
-
