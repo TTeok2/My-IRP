@@ -92,7 +92,7 @@ if raw_df is not None:
     st.altair_chart(box, use_container_width=True)
 
     st.subheader("2. 사업자별 평균 수익률")
-    avg_df = df.groupby("사업자명")["1년수익률"].mean().reset_index().sort_values(by="1년수익률", ascending=False)
+    avg_df = df.groupby("사업자명")[["1년수익률"]].mean().reset_index().sort_values(by="1년수익률", ascending=False)
     bar = alt.Chart(avg_df).mark_bar().encode(
         x=alt.X("사업자명:N", sort="-y", title="사업자명"),
         y=alt.Y("1년수익률:Q", title="평균 수익률 (%)"),
@@ -111,6 +111,7 @@ if raw_df is not None:
         st.altair_chart(scatter, use_container_width=True)
 
         st.subheader("4. 순효율(수익률 - 비용) 높은 사업자")
+        st.caption("💡 순효율은 단순히 수익률에서 총비용부담률을 뺀 값으로, 실제 투자성과와 차이가 있을 수 있습니다.")
         eff_df = df[["사업자명", "원리금구분", "1년수익률", "총비용부담률", "순효율"]].dropna()
         top_eff = eff_df.sort_values(by="순효율", ascending=False)
         st.dataframe(top_eff, use_container_width=True)
