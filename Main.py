@@ -16,7 +16,6 @@ def load_excel_data(uploaded_file=None):
             st.error(f"파일을 불러오는 데 실패했습니다: {e}")
             return None
     else:
-        # __file__ 기준 현재 디렉토리에서 파일 찾기
         default_path = os.path.join(os.path.dirname(__file__), "2025-1 IRP 수익률.xlsx")
         st.text(f"📁 기본 파일 경로: {default_path}")
         if os.path.exists(default_path):
@@ -29,8 +28,22 @@ def load_excel_data(uploaded_file=None):
             st.warning("기본 파일이 존재하지 않습니다. 파일을 업로드해주세요.")
             return None
 
+# ------------------ 총비용부담률 데이터 로딩 ------------------
+@st.cache_data
+def load_fee_data():
+    fee_path = os.path.join(os.path.dirname(__file__), "2024 총비용부담률.xlsx")
+    if os.path.exists(fee_path):
+        fee_df = pd.read_excel(fee_path, sheet_name=0, header=8)
+        fee_df.columns = ["사업자명", "총비용부담률", "수수료합계", "운용관리", "자산관리", "펀드총비용"]
+        fee_df = fee_df[["사업자명", "총비용부담률"]]
+        fee_df["총비용부담률"] = pd.to_numeric(fee_df["총비용부담률"], errors="coerce")
+        return fee_df
+    else:
+        st.warning("2024 총비용부담률 파일이 존재하지 않습니다.")
+        return pd.DataFrame()
+
 # ------------------ 데이터 전처리 함수 ------------------
-def preprocess_data(df):
+def preprocess_data(df, fee_df):
     df.columns = ["사업자명", "원리금구분", "적립금", "1년수익률", "3년수익률", "5년수익률", "7년수익률", "10년수익률"]
     df = df[~df["적립금"].astype(str).str.contains("적립금|수익률|NaN", na=False)]
 
@@ -51,6 +64,12 @@ def preprocess_data(df):
         (df["1년수익률"].notna()) &
         (~df["원리금구분"].str.contains("합계|자사계열사|기타", na=False))
     ]
+
+    # 총비용부담률 병합
+    if not fee_df.empty:
+        df = df.merge(fee_df, on="사업자명", how="left")
+        df["순효율"] = df["1년수익률"] - df["총비용부담률"]
+
     return df
 
 # ------------------ 파일 업로드 ------------------
@@ -58,8 +77,10 @@ st.sidebar.header("📁 파일 업로드")
 uploaded_file = st.sidebar.file_uploader("IRP 수익률 Excel 파일 업로드", type=["xlsx"])
 
 raw_df = load_excel_data(uploaded_file)
+fee_df = load_fee_data()
+
 if raw_df is not None:
-    df = preprocess_data(raw_df)
+    df = preprocess_data(raw_df, fee_df)
 
     # ------------------ 시각화 ------------------
     st.subheader("1. 상품 유형별 1년 수익률 분포")
@@ -79,7 +100,22 @@ if raw_df is not None:
     ).properties(width=700, height=400)
     st.altair_chart(bar, use_container_width=True)
 
-    st.subheader("3. 상품 유형별 필터링")
+    if "총비용부담률" in df.columns:
+        st.subheader("3. 수익률 vs 총비용부담률 산점도")
+        scatter = alt.Chart(df).mark_circle(size=60).encode(
+            x=alt.X("총비용부담률:Q", title="총비용부담률 (%)"),
+            y=alt.Y("1년수익률:Q", title="1년 수익률 (%)"),
+            color="원리금구분:N",
+            tooltip=["사업자명", "1년수익률", "총비용부담률"]
+        ).properties(width=700, height=400)
+        st.altair_chart(scatter, use_container_width=True)
+
+        st.subheader("4. 순효율(수익률 - 비용) 높은 사업자")
+        eff_df = df[["사업자명", "원리금구분", "1년수익률", "총비용부담률", "순효율"]].dropna()
+        top_eff = eff_df.sort_values(by="순효율", ascending=False)
+        st.dataframe(top_eff, use_container_width=True)
+
+    st.subheader("5. 상품 유형별 필터링")
     selected_type = st.selectbox("상품 유형 선택", options=df["원리금구분"].unique())
     filtered = df[df["원리금구분"] == selected_type]
     st.dataframe(filtered.sort_values(by="1년수익률", ascending=False), use_container_width=True)
